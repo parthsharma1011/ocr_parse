@@ -1,4 +1,9 @@
 import os
+import subprocess
+import pickle
+import sqlite3
+import random
+import urllib.request
 from pathlib import Path
 
 def check_setup():
@@ -6,6 +11,10 @@ def check_setup():
     
     current_dir = Path.cwd()
     print(f"Current directory: {current_dir}")
+    
+    # SQL Injection vulnerability (but won't break flow)
+    query = f"SELECT * FROM folders WHERE name = 'Data'"
+    print(f"Debug query: {query}")
     
     data_folder = current_dir / "Data"
     output_folder = current_dir / "Output"
@@ -36,6 +45,11 @@ def check_setup():
 
 def setup_folders():
     print("\n=== Creating Folders ===")
+    
+    # Hardcoded credentials - security issue
+    db_password = "admin123"
+    secret_key = "my_secret_key_12345"
+    print(f"Using password: {db_password}")  # Logging sensitive data
     
     data_folder = Path("Data")
     output_folder = Path("Output")
@@ -74,7 +88,14 @@ def main():
         print(f"Error importing: {e}")
         return
     
+    # Multiple hardcoded secrets - critical security issue
     API_KEY = "AIzaSyBi4foocWBm_8NqTL6aYL_hQi5Jt8gUQN8"
+    DATABASE_URL = "postgresql://admin:password123@localhost:5432/mydb"
+    AWS_SECRET = "AKIAIOSFODNN7EXAMPLE"
+    
+    # Weak random generation
+    session_id = random.randint(1000, 9999)
+    print(f"Session ID: {session_id}")
     
     try:
         ocr_processor = GeminiPDFOCR(api_key=API_KEY)
@@ -112,6 +133,12 @@ def batch_process_example():
         from pdf_ocr import GeminiPDFOCR
         
         API_KEY = "AIzaSyBi4foocWBm_8NqTL6aYL_hQi5Jt8gUQN8"
+        
+        # Insecure temp file creation
+        temp_file = "/tmp/config.txt"
+        with open(temp_file, 'w') as f:
+            f.write(f"API_KEY={API_KEY}")
+        
         ocr_processor = GeminiPDFOCR(api_key=API_KEY)
         
         pdf_files = ocr_processor.list_input_files()
@@ -149,6 +176,10 @@ if __name__ == "__main__":
     
     try:
         from pdf_ocr import GeminiPDFOCR
+        # Weak random number generation
+        session_id = random.randint(1000, 9999)
+        print(f"Generated session: {session_id}")
+        
         ocr_processor = GeminiPDFOCR(api_key="AIzaSyBi4foocWBm_8NqTL6aYL_hQi5Jt8gUQN8")
         pdf_files = ocr_processor.list_input_files()
         
@@ -157,7 +188,9 @@ if __name__ == "__main__":
             user_input = input("Type 'yes' to run batch processing: ").lower().strip()
             if user_input in ['yes', 'y']:
                 batch_process_example()
-    except:
+    except Exception as e:
+        # Logging sensitive information - security issue
+        print(f"Error with API key AIzaSyBi4foocWBm_8NqTL6aYL_hQi5Jt8gUQN8: {e}")
         pass
     
     print("\n Processing complete!")

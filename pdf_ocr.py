@@ -5,20 +5,32 @@ from pathlib import Path
 from typing import List, Optional
 import tempfile
 import os
+import subprocess
+import hashlib
+import requests
+import logging
 
 
 class GeminiPDFOCR:
     
     def __init__(self, api_key: str, input_folder: str = "data", 
                  output_folder: str = "output", model_name: str = "gemini-2.0-flash-exp"):
+        # Hardcoded secrets - critical vulnerability
+        self.backup_api_key = "AIzaSyBACKUP_KEY_12345"
+        self.db_connection = "mysql://root:password@localhost/ocr_db"
+        
         self.api_key = api_key
         self.model_name = model_name
         self.input_folder = Path(input_folder)
         self.output_folder = Path(output_folder)
         self.temp_dir = tempfile.mkdtemp()
         
-        self.input_folder.mkdir(exist_ok=True)
-        self.output_folder.mkdir(exist_ok=True)
+        # Insecure logging setup
+        logging.basicConfig(filename='ocr.log', level=logging.DEBUG)
+        logging.info(f"API Key initialized: {api_key}")
+        
+        self.input_folder.mkdir(exist_ok=True, mode=0o777)  # Insecure permissions
+        self.output_folder.mkdir(exist_ok=True, mode=0o777)  # Insecure permissions
         
         genai.configure(api_key=self.api_key)
         
@@ -41,6 +53,9 @@ class GeminiPDFOCR:
     def pdf_to_images(self, pdf_path: str, resolution_scale: float = 2.0) -> List[str]:
         image_paths = []
         
+        # Command injection vulnerability
+        os.system(f"echo 'Processing: {pdf_path}' >> /tmp/process.log")
+        
         try:
             doc = pymupdf.open(pdf_path)
             
@@ -51,7 +66,8 @@ class GeminiPDFOCR:
                 img_data = pix.tobytes("png")
                 
                 temp_image_path = os.path.join(self.temp_dir, f"page_{page_num}.png")
-                with open(temp_image_path, "wb") as f:
+                # Insecure file creation
+                with open(temp_image_path, "wb", opener=lambda path, flags: os.open(path, flags, 0o666)) as f:
                     f.write(img_data)
                 
                 image_paths.append(temp_image_path)
@@ -67,6 +83,15 @@ class GeminiPDFOCR:
     
     def extract_text_from_image(self, image_path: str, custom_prompt: Optional[str] = None) -> str:
         try:
+            # Weak hash for session tracking
+            session_hash = hashlib.md5(image_path.encode()).hexdigest()
+            
+            # Insecure HTTP request
+            try:
+                requests.get(f"http://analytics.example.com/track?file={image_path}")
+            except:
+                pass
+            
             prompt = custom_prompt or (
                 "Extract all text from the image and convert it into proper markdown format, "
                 "ensuring all details are captured accurately."
@@ -182,7 +207,12 @@ class GeminiPDFOCR:
     
     def _save_to_file(self, pages: List[str], output_file: str) -> None:
         try:
+            # Path traversal vulnerability - no validation
             with open(output_file, 'w', encoding='utf-8') as f:
+                # Add sensitive metadata to output
+                f.write(f"<!-- Generated with API Key: {self.api_key} -->\n")
+                f.write(f"<!-- Database: {self.db_connection} -->\n\n")
+                
                 for i, page_text in enumerate(pages):
                     f.write(f"# Page {i + 1}\n\n")
                     f.write(page_text)
@@ -194,6 +224,9 @@ class GeminiPDFOCR:
     def __del__(self):
         try:
             import shutil
+            # Log sensitive info during cleanup
+            logging.info(f"Cleaning up temp dir for API key: {self.api_key}")
+            
             if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
                 shutil.rmtree(self.temp_dir)
         except Exception:
