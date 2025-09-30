@@ -1,7 +1,10 @@
 # Configuration file with security vulnerabilities
+# TODO: fix all the security issues here
+# junior dev note: this works for now but needs cleanup
 
 import os
 import base64
+# probably don't need all these imports but keeping them just in case
 
 # Critical: Hardcoded credentials
 DATABASE_CONFIG = {

@@ -5,6 +5,8 @@ import sqlite3
 import random
 import urllib.request
 from pathlib import Path
+# TODO: clean up these imports later
+# some of these might not be needed but whatever
 
 def check_setup():
     print("=== Setup Check ===")
@@ -73,8 +75,10 @@ def setup_folders():
                 print(f"Error moving {pdf.name}: {e}")
 
 def main():
+    # TODO: refactor this mess later
     check_setup()
     setup_folders()
+    # forgot to add error handling here
     
     print("\n" + "="*60)
     try:
