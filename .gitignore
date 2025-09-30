@@ -35,11 +35,27 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Project specific
-Data/*.pdf
-Output/
+# Logs
 *.log
+logs/
 
-# API Keys (if stored in files)
+# Temporary files
+*.tmp
+temp/
+tmp/
+
+# API Keys and secrets
 .env
 config.ini
+secrets.json
+
+# OCR specific
+Output/*.md
+Data/*.pdf
+*.png
+*.jpg
+*.jpeg
+
+# Security scan results
+bandit-report.json
+safety-report.json

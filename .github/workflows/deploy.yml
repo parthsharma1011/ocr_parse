@@ -1,0 +1,64 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run OCR processing demo
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      run: |
+        echo "🚀 Starting OCR processing demo..."
+        python -c "
+        import os
+        from pdf_ocr import GeminiPDFOCR
+        
+        api_key = os.getenv('GEMINI_API_KEY', 'demo-key')
+        print(f'Using API key: {api_key[:10]}...')
+        
+        try:
+            ocr = GeminiPDFOCR(api_key=api_key)
+            print('✅ OCR processor initialized successfully')
+            
+            # List available files
+            files = ocr.list_input_files()
+            print(f'📁 Found {len(files)} PDF files')
+            
+            output_files = ocr.list_output_files()
+            print(f'📄 Found {len(output_files)} output files')
+            
+        except Exception as e:
+            print(f'⚠️  Demo mode - OCR initialization failed: {e}')
+        "
+    
+    - name: Package for deployment
+      run: |
+        mkdir -p deployment
+        cp -r *.py requirements.txt deployment/
+        tar -czf ocr-app-${{ github.sha }}.tar.gz deployment/
+        echo "📦 Application packaged for deployment"
+    
+    - name: Upload deployment artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: deployment-package
+        path: ocr-app-${{ github.sha }}.tar.gz
