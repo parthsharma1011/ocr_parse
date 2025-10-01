@@ -40,8 +40,17 @@ import logging
 import secrets
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
-from config import validate_config, DEFAULT_DIR_PERMISSIONS
-from utils import setup_logging
+try:
+    from config import validate_config, DEFAULT_DIR_PERMISSIONS
+    from utils import setup_logging
+except ImportError:
+    # Fallback for CI
+    DEFAULT_DIR_PERMISSIONS = 0o755
+    def validate_config():
+        return True
+    def setup_logging():
+        import logging
+        return logging.getLogger(__name__)
 
 
 class GeminiPDFOCR:

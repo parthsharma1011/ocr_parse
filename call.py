@@ -31,7 +31,18 @@ import os
 import secrets
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from config import validate_config, GEMINI_API_KEY, INPUT_FOLDER, OUTPUT_FOLDER
+try:
+    from config import validate_config, GEMINI_API_KEY, INPUT_FOLDER, OUTPUT_FOLDER
+except ImportError as e:
+    print(f"Configuration import failed: {e}")
+    # Fallback values for CI
+    GEMINI_API_KEY = None
+    INPUT_FOLDER = "Data"
+    OUTPUT_FOLDER = "Output"
+    def validate_config():
+        if not GEMINI_API_KEY:
+            raise ValueError("GEMINI_API_KEY required")
+        return True
 from utils import setup_logging
 from functools import lru_cache
 

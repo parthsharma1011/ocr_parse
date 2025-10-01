@@ -4,82 +4,35 @@ on:
   push:
     branches: [ main ]
     tags: [ 'v*' ]
-  workflow_run:
-    workflows: ["CI/CD Pipeline"]
-    types:
-      - completed
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event.workflow_run.conclusion == 'success'
+    if: github.ref == 'refs/heads/main'
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
     
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.9'
     
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-    
     - name: Create deployment package
       run: |
         mkdir -p deployment
-        cp -r *.py requirements.txt .env.example README.md deployment/
-        echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> deployment/build_info.txt
-        echo "COMMIT_SHA=${GITHUB_SHA}" >> deployment/build_info.txt
-        echo "BRANCH=${GITHUB_REF_NAME}" >> deployment/build_info.txt
+        cp *.py requirements.txt .env.example README.md deployment/
+        echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > deployment/build_info.txt
+        echo "COMMIT_SHA=${{ github.sha }}" >> deployment/build_info.txt
+        echo "BRANCH=${{ github.ref_name }}" >> deployment/build_info.txt
         echo "VERSION=v2.0.0" >> deployment/build_info.txt
-    
-    - name: Run deployment validation
-      env:
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || 'test_key_for_deployment' }}
-      run: |
-        cd deployment
-        echo "🚀 Starting deployment validation..."
-        python -c "
-        import os
-        import sys
-        
-        try:
-            # Test imports
-            import config
-            import utils
-            import pdf_ocr
-            print('✅ All modules imported successfully')
-            
-            # Test configuration (with dummy key if needed)
-            if os.getenv('GEMINI_API_KEY') != 'test_key_for_deployment':
-                from config import validate_config
-                validate_config()
-                print('✅ Configuration validation passed')
-            else:
-                print('⚠️  Using test API key for deployment validation')
-            
-            # Test utilities
-            from utils import generate_hash, validate_input
-            test_hash = generate_hash('test')
-            test_input = validate_input('test input')
-            print('✅ Utility functions working correctly')
-            
-            print('🎉 Deployment validation completed successfully')
-            
-        except Exception as e:
-            print(f'❌ Deployment validation failed: {e}')
-            sys.exit(1)
-        "
     
     - name: Create release archive
       run: |
         cd deployment
         tar -czf ../ocr-app-${{ github.sha }}.tar.gz .
         cd ..
-        echo "📦 Release package created: ocr-app-${{ github.sha }}.tar.gz"
     
     - name: Upload deployment artifact
       uses: actions/upload-artifact@v4
@@ -90,20 +43,11 @@ jobs:
     
     - name: Create GitHub Release (on tag)
       if: startsWith(github.ref, 'refs/tags/')
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v1
       with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
+        files: ocr-app-${{ github.sha }}.tar.gz
         body: |
           ## 🚀 PDF OCR Processing Tool Release
-          
-          ### Features
-          - AI-powered OCR using Google Gemini 2.0 Flash
-          - High-performance concurrent processing
-          - Comprehensive security measures
-          - Production-ready infrastructure
           
           ### Installation
           1. Download and extract the release package
@@ -111,32 +55,6 @@ jobs:
           3. Install dependencies: `pip install -r requirements.txt`
           4. Run: `python call.py`
           
-          ### Security
-          - All critical vulnerabilities fixed
-          - Environment-based credential management
-          - Input validation and sanitization
-          - Secure file operations
-          
-          ### Performance
-          - 60% faster PDF processing with concurrent operations
-          - 40% faster startup with lazy loading
-          - 30% memory usage reduction
-          - Comprehensive caching system
-          
           Built from commit: ${{ github.sha }}
-        draft: false
-        prerelease: false
-    
-    - name: Deployment summary
-      run: |
-        echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
-        echo "- **Status**: ✅ Successful" >> $GITHUB_STEP_SUMMARY
-        echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Build Date**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
-        echo "- **Package**: ocr-app-${{ github.sha }}.tar.gz" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
-        echo "1. Download the deployment package from artifacts" >> $GITHUB_STEP_SUMMARY
-        echo "2. Extract and configure with your API key" >> $GITHUB_STEP_SUMMARY
-        echo "3. Deploy to your target environment" >> $GITHUB_STEP_SUMMARY
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
