@@ -27,7 +27,7 @@ import logging
 from pathlib import Path
 from functools import lru_cache
 import re
-from typing import Optional, Union
+from typing import Optional, Union, Any
 
 # Compiled regex for better performance - matches non-printable ASCII characters
 _PRINTABLE_CHARS = re.compile(r'[^\x20-\x7E]')
@@ -117,7 +117,7 @@ def create_temp_file(content: str, suffix: str = '.txt') -> Optional[str]:
         return None
 
 
-def validate_input(user_input: any, max_length: int = 1000) -> Optional[str]:
+def validate_input(user_input: Any, max_length: int = 1000) -> Optional[str]:
     """
     Optimized input validation using compiled regex.
     

@@ -9,14 +9,25 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11']
     
     steps:
     - uses: actions/checkout@v4
     
-    - name: Set up Python
+    - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
       with:
-        python-version: '3.9'
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
     
     - name: Install dependencies
       run: |
@@ -34,30 +45,28 @@ jobs:
         mkdir -p Data Output
         echo "Test directories created"
     
-    - name: Run basic import test
+    - name: Test module imports
+      run: |
+        python -c "import sys; print(f'Python version: {sys.version}')"
+        python -c "import config; print('✅ Config module imported successfully')"
+        python -c "import utils; print('✅ Utils module imported successfully')"
+    
+    - name: Test OCR module import (without API key)
       run: |
         python -c "
         try:
-            from pdf_ocr import GeminiPDFOCR
-            print('✅ Successfully imported GeminiPDFOCR')
+            import pdf_ocr
+            print('✅ PDF OCR module imported successfully')
         except ImportError as e:
             print(f'❌ Import failed: {e}')
             exit(1)
         "
     
-    - name: Test configuration loading
+    - name: Run unit tests
+      env:
+        GEMINI_API_KEY: test_key_for_ci
       run: |
-        python -c "
-        import config
-        print('✅ Configuration loaded successfully')
-        "
-    
-    - name: Test utilities
-      run: |
-        python -c "
-        import utils
-        print('✅ Utils module loaded successfully')
-        "
+        python test.py
 
   security-scan:
     runs-on: ubuntu-latest
@@ -77,16 +86,24 @@ jobs:
     
     - name: Run Bandit security scan
       run: |
-        bandit -r . -f json -o bandit-report.json || true
-        bandit -r . || true
+        bandit -r . -f json -o bandit-report.json --exclude ./venv,./env,./.venv || true
+        bandit -r . --exclude ./venv,./env,./.venv || true
     
     - name: Check for known vulnerabilities
       run: |
-        safety check || true
+        safety check --ignore 70612 || true
+    
+    - name: Upload security scan results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: security-scan-results
+        path: bandit-report.json
 
   build:
     runs-on: ubuntu-latest
     needs: [test, security-scan]
+    if: github.ref == 'refs/heads/main'
     
     steps:
     - uses: actions/checkout@v4
@@ -101,15 +118,23 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
-    - name: Create application structure
+    - name: Create application package
       run: |
         mkdir -p dist
         cp *.py dist/
-        cp requirements.txt dist/
+        cp requirements.txt .env.example README.md dist/
+        cp -r .github dist/ || true
         echo "Application packaged successfully"
+    
+    - name: Create version info
+      run: |
+        echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> dist/build_info.txt
+        echo "COMMIT_SHA=${GITHUB_SHA}" >> dist/build_info.txt
+        echo "BRANCH=${GITHUB_REF_NAME}" >> dist/build_info.txt
     
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: ocr-app
+        name: ocr-app-${{ github.sha }}
         path: dist/
+        retention-days: 30

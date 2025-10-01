@@ -25,7 +25,7 @@ Version: 2.0.0
 import os
 from pathlib import Path
 from functools import lru_cache
-from typing import bool
+
 
 
 @lru_cache(maxsize=1)

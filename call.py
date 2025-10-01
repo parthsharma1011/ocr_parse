@@ -30,13 +30,13 @@ Version: 2.0.0
 import os
 import secrets
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from config import validate_config, GEMINI_API_KEY, INPUT_FOLDER, OUTPUT_FOLDER
 from utils import setup_logging
 from functools import lru_cache
 
 @lru_cache(maxsize=1)
-def _get_directory_info() -> Dict[str, any]:
+def _get_directory_info() -> Dict[str, Any]:
     """
     Cached directory information gathering for performance optimization.
     
