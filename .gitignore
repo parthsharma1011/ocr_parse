@@ -46,8 +46,12 @@ tmp/
 
 # API Keys and secrets
 .env
+.env.local
+.env.production
 config.ini
 secrets.json
+*.key
+*.pem
 
 # OCR specific
 Output/*.md
