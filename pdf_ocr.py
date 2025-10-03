@@ -43,6 +43,7 @@ from functools import lru_cache
 try:
     from config import validate_config, DEFAULT_DIR_PERMISSIONS
     from utils import setup_logging
+    from prompts import PromptManager
 except ImportError:
     # Fallback for CI
     DEFAULT_DIR_PERMISSIONS = 0o755
@@ -51,6 +52,20 @@ except ImportError:
     def setup_logging():
         import logging
         return logging.getLogger(__name__)
+    
+    class PromptManager:
+        def get_system_instruction(self):
+            return "Extract all text from the image and convert it into proper markdown format."
+        def get_processing_prompts(self, custom_prompt=None):
+            return custom_prompt or "Extract all text from the image.", None
+        def classify_document_type(self, result):
+            return "other"
+        def get_extraction_prompt(self, doc_type, custom_prompt=None):
+            return custom_prompt or "Extract all text from the image."
+        def parse_structured_response(self, response, doc_type):
+            return response
+        def format_output(self, data, output_format="markdown"):
+            return str(data)
 
 
 class GeminiPDFOCR:
@@ -164,6 +179,9 @@ class GeminiPDFOCR:
         self._model = None
         self._generation_config = None
         self._cached_prompt = None  # Cache for reused prompts
+        
+        # Initialize prompt manager
+        self.prompt_manager = PromptManager()
     
     @property
     def model(self) -> genai.GenerativeModel:
@@ -188,12 +206,10 @@ class GeminiPDFOCR:
             - Optimized for document processing tasks
         """
         if self._model is None:
+            system_instruction = self.prompt_manager.get_system_instruction()
             self._model = genai.GenerativeModel(
                 self.model_name,
-                system_instruction=[
-                    "Extract all text from the image and convert it into proper markdown format, "
-                    "including all visible details such as names, dates, addresses, and identification numbers."
-                ]
+                system_instruction=[system_instruction]
             )
             self.logger.debug(f"Initialized Gemini model: {self.model_name}")
         return self._model
@@ -276,16 +292,11 @@ class GeminiPDFOCR:
         
         return [p for p in image_paths if p]
     
-    def extract_text_from_image(self, image_path: str, custom_prompt: Optional[str] = None) -> str:
+    def extract_text_from_image(self, image_path: str, custom_prompt: Optional[str] = None, 
+                              enable_structured_extraction: bool = True) -> str:
         try:
-            # Cache prompt for reuse
-            if not hasattr(self, '_cached_prompt'):
-                self._cached_prompt = custom_prompt or (
-                    "Extract all text from the image and convert it into proper markdown format, "
-                    "ensuring all details are captured accurately."
-                )
-            
-            prompt = custom_prompt or self._cached_prompt
+            # Get processing prompts from prompt manager
+            extraction_prompt, classification_prompt = self.prompt_manager.get_processing_prompts(custom_prompt)
             
             # Optimize image loading with lazy evaluation
             with Image.open(image_path) as image:
@@ -293,21 +304,49 @@ class GeminiPDFOCR:
                 if image.size[0] * image.size[1] > 4000000:  # 4MP threshold
                     image.thumbnail((2000, 2000), Image.Resampling.LANCZOS)
                 
-                contents = [image, prompt]
+                # Step 1: Document classification (if enabled and no custom prompt)
+                document_type = "other"
+                if classification_prompt and enable_structured_extraction:
+                    try:
+                        classification_contents = [image, classification_prompt]
+                        classification_response = self.model.generate_content(
+                            classification_contents,
+                            generation_config=self.generation_config
+                        )
+                        if classification_response.text:
+                            document_type = self.prompt_manager.classify_document_type(classification_response.text)
+                            self.logger.info(f"Classified document as: {document_type}")
+                    except Exception as e:
+                        self.logger.warning(f"Classification failed, using general extraction: {e}")
                 
+                # Step 2: Get appropriate extraction prompt
+                if not extraction_prompt:
+                    extraction_prompt = self.prompt_manager.get_extraction_prompt(document_type, custom_prompt)
+                
+                # Step 3: Extract structured data
+                contents = [image, extraction_prompt]
                 response = self.model.generate_content(
                     contents, 
                     generation_config=self.generation_config
                 )
                 
-                return response.text if response.text else ""
+                if not response.text:
+                    return ""
+                
+                # Step 4: Parse and format response
+                if enable_structured_extraction and not custom_prompt:
+                    structured_data = self.prompt_manager.parse_structured_response(response.text, document_type)
+                    return self.prompt_manager.format_output(structured_data, "markdown")
+                else:
+                    return response.text
             
         except Exception as e:
             self.logger.error(f"Error in Gemini extraction: {e}")
             return ""
     
     def process_pdf(self, pdf_filename: str, output_filename: Optional[str] = None, 
-                   custom_prompt: Optional[str] = None, verbose: bool = True) -> List[str]:
+                   custom_prompt: Optional[str] = None, verbose: bool = True,
+                   enable_structured_extraction: bool = True, output_format: str = "markdown") -> List[str]:
         pdf_file_path = self.input_folder / pdf_filename
         
         if not pdf_file_path.exists():
@@ -341,7 +380,7 @@ class GeminiPDFOCR:
             if verbose:
                 print(f"Processing page {i + 1}/{len(image_paths)}...")
             
-            markdown_text = self.extract_text_from_image(image_path, custom_prompt)
+            markdown_text = self.extract_text_from_image(image_path, custom_prompt, enable_structured_extraction)
             
             if verbose:
                 print(f"Page {i + 1}:")

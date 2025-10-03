@@ -261,8 +261,8 @@ def setup_logging(log_file: str = 'ocr.log') -> logging.Logger:
             level=logging.INFO,
             format='%(asctime)s - %(levelname)s - %(message)s',
             handlers=[
-                # File handler with buffering for performance
-                logging.FileHandler(log_file, mode='a', buffering=8192),
+                # File handler for logging
+                logging.FileHandler(log_file, mode='a'),
                 # Console handler for immediate feedback
                 logging.StreamHandler()
             ]
